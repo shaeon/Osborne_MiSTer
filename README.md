@@ -65,6 +65,12 @@ it (for example the Osborne extended utilities disk). Run `SETUP`, choose
 **Disk images and ROM dumps of software are not included**, except the BIOS
 and character ROMs already present in the original repository.
 
+## Building
+
+Open `Osborne.qpf` in Quartus Prime Lite 17.0, or let GitHub Actions build it:
+every push to `master` leaves the `.rbf` in the *Actions* tab, and pushing a
+`v*` tag creates a release.
+
 ## Credits
 
 - **Jeremy Soller (jackpot51)**: original Osborne_MiSTer project.

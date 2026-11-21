@@ -254,6 +254,20 @@ Las notas de desarrollo y lo pendiente están en `docs/PROGRESO.md`.
 Abre `Osborne.qpf` en Quartus Prime Lite 17.0 y compila. Resultado con 17.0.2:
 23 % de ALMs, 1,25 Mbit de BRAM y todos los relojes dentro de tiempos.
 
+También se compila solo en GitHub Actions (`.github/workflows/build.yml`) con
+la imagen Docker `raetro/quartus:17.0`:
+
+- Cada push o pull request a `master` compila y deja el `.rbf` y los informes
+  en la pestaña *Actions* (no compila si solo cambian la documentación, `sim/`,
+  `tools/` o `releases/`).
+- Se puede lanzar a mano desde *Actions > Build > Run workflow*.
+- Al subir una etiqueta `v*` (`git tag v1.0 && git push origin v1.0`) crea una
+  Release con el `.rbf`.
+- El resumen de la ejecución muestra las holguras de tiempos y, si falla, los
+  errores de Quartus.
+- Las acciones van en versiones que funcionan con Node.js 24, para que no salga
+  el aviso de que Node 20 está obsoleto.
+
 ## Créditos
 
 **Código usado en el core**
