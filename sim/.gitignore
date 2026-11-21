@@ -7,3 +7,6 @@ rom
 *.pgm
 *.png
 fetch.txt
+*.sav
+ram.bin
+out*.txt

@@ -72,3 +72,18 @@ Plan acordado para revisar:
 - La BIOS: CON: TTY = pantalla/teclado, CRT = serie; RDR: PTR y PUN: PTP = serie
 
 Siguiente: SCREEN-PAC.
+
+## SCREEN-PAC (21/11/2026): hecho
+
+- Registro en 2400 (D0 = 104 columnas, D1 = 0 -> HC-LEFT), lectura con D2 = 0
+  para que la BIOS la detecte; opción del OSD status[10]
+- Vídeo reescrito a 1024 relojes de 15,97 MHz por línea en un dominio
+  clk_vid = 63,89 MHz (PLL: 31,944 + 63,889 MHz, 50*115/6/{30,15}); la
+  CPU sigue en clk_sys
+- Comprobado en simulación con OS1XUTLS: la BIOS escribe 00 en 2400 al
+  arrancar, SETUP la detecta, se elige 104 físicas, se guarda en memoria y
+  XDIR sale en 104 columnas
+- Banco de pruebas: -p (SCREEN-PAC), -save/-load (estado completo)
+- Quartus 17.0.2: clk_vid +4,1 ns, clk_sys +8,6 ns, 23 % ALMs
+
+Pendiente: Nuevo Video (necesita monrom 1.51), IEEE-488.

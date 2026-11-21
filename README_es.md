@@ -25,7 +25,8 @@ La máquina se ha reescrito siguiendo el *Osborne 1 Technical Manual* y el drive
 ## Características
 
 - **CPU**: Z80 a 3,9936 MHz (T80) con clock enables desde un reloj de sistema
-  de 31,95 MHz (2 x 15,9744 MHz, la frecuencia maestra del Osborne).
+  de 31,94 MHz (2 x 15,9744 MHz, la frecuencia maestra del Osborne). El vídeo
+  va con un segundo reloj de 63,89 MHz del mismo PLL.
 - **Memoria**: 64 KB de RAM, ROM de BIOS 1.44, generador de caracteres
   7A3007-00 y RAM de atributos de 4K x 1 bit.
 - **Cambio de banco** como en la placa:
@@ -49,9 +50,13 @@ La máquina se ha reescrito siguiendo el *Osborne 1 Technical Manual* y el drive
 - **Vídeo**: ventana de 52 x 24 caracteres de 8 x 10 sobre la pantalla virtual
   de 128 x 32, con scroll horizontal (PIA puerto A) y vertical (PIA puerto B)
   por hardware, media intensidad (bit de atributo), subrayado (bit 7 del
-  carácter) y gráficos de bloque. Temporización de 512 x 260 píxeles a
-  7,9872 MHz: 15,6 kHz / 60 Hz. Fósforo verde, ámbar o blanco y efectos del
-  scandoubler.
+  carácter) y gráficos de bloque. Líneas de 1024 píxeles a 15,9744 MHz
+  (en modo normal cada píxel se repite) y 260 líneas: 15,6 kHz / 60 Hz.
+  Fósforo verde, ámbar o blanco y efectos del scandoubler.
+- **SCREEN-PAC** (opción del OSD): la placa de Osborne de 104 columnas, con
+  su registro en 2400 (D0 alta resolución, D1 HC-LEFT) y la detección por el
+  bit D2 al leer 2400. En alta resolución el reloj de caracteres va al doble y
+  se ven 104 columnas de la pantalla virtual de 128.
 - **PIAs MC6821**: implementación propia con registros de dirección, flancos
   configurables de CA1/CB1/CA2/CB2 e interrupciones. El borrado vertical entra
   por CA1 de la PIA de vídeo y genera la interrupción de 60 Hz que usa la BIOS.
@@ -69,7 +74,7 @@ La máquina se ha reescrito siguiendo el *Osborne 1 Technical Manual* y el drive
 - **Sonido**: el zumbador, activado por el bit 5 del puerto B y modulado por el
   contador de líneas (4 de cada 10), como el original.
 
-No implementado: dispositivos IEEE-488, SCREEN-PAC y placas de 80 columnas.
+No implementado: dispositivos IEEE-488 y la placa Nuevo Video de 80 columnas.
 
 ## Uso
 
@@ -147,6 +152,25 @@ STAT RDR:=PTR:      lector por el puerto serie
 STAT PUN:=PTP:      perforadora por el puerto serie
 ```
 
+### SCREEN-PAC (52/80/104 columnas)
+
+1. Activa *SCREEN-PAC (104 col)* en el OSD.
+2. Arranca un disco de CP/M cuya BIOS la soporte, por ejemplo el de
+   utilidades extendidas (OS1XUTLS). La BIOS la detecta al arrancar.
+3. Ejecuta `SETUP`, elige la fuente (*M* para la memoria), luego
+   *C SCREEN SIZE* y el ancho físico: *D* 52, *E* 80 o *F* 104 columnas. El
+   ancho lógico (*A* 52, *B* 128) es el de la pantalla virtual por la que se
+   desplaza la ventana.
+4. Vuelve con Intro y guarda en memoria (*M*) o en el disco (*A*/*B*) para
+   que quede como opción por defecto.
+
+La salida de vídeo tiene la misma temporización en los dos modos (líneas de
+1024 píxeles a 15,97 MHz), así que el cambio de 52 a 104 columnas no cambia
+la resolución y el escalador HDMI no pierde la imagen.
+
+Con la opción desactivada el core se comporta como un Osborne sin la placa:
+el registro no existe y la BIOS no la detecta.
+
 ## Cómo funciona
 
 **CPU y memoria.** El T80 funciona con un clock enable cada 8 ciclos del reloj
@@ -179,6 +203,13 @@ leído al principio de cada cuadro; la columna, con el scroll horizontal más
 
 Hay una instancia por unidad, conectadas a dos imágenes del OSD.
 
+**SCREEN-PAC.** La línea siempre tiene 1024 relojes de píxel. En modo normal
+cada celda de carácter dura 16 relojes y el registro de desplazamiento avanza
+cada dos; en alta resolución la celda dura 8 y avanza en cada reloj. La columna
+inicial sigue a MAME: scroll_x + 0Bh en modo normal y (scroll_x & 60h) +
+(HC-LEFT ? 09h : 01h) + 17h en alta resolución. El modo se toma al principio de
+cada línea.
+
 **Puerto serie.** Un contador genera el reloj RxC/TxC con el mismo periodo que
 la placa: (p_low + p_high) x divisor ciclos del reloj maestro, según la pareja
 elegida. La ACIA implementa todos los formatos de palabra, los divisores ÷1,
@@ -199,7 +230,9 @@ cd sim && ./build.sh
 
 Opciones: `-a`/`-b` imágenes, `-t` segundos simulados, `-k tiempo texto`
 pulsaciones, `-s tiempo texto` caracteres por el puerto serie, `-v 1` traza
-del controlador de disco y de la ACIA. Lo recibido por el puerto serie se
+del controlador de disco, la ACIA y la SCREEN-PAC, `-p` instala la
+SCREEN-PAC, `-save f`/`-load f` guardan y recuperan el estado completo de la
+simulación para no repetir el arranque. Lo recibido por el puerto serie se
 muestra al final. Cada pulsación tarda 0,24 s: hay que dejar tiempo para que
 termine de escribirse una orden antes de la siguiente.
 
@@ -209,6 +242,8 @@ Comprobado en simulación:
 - Arranque de CP/M 2.2 desde disco de doble densidad y de simple densidad.
 - `DIR B:` con un disco de simple densidad en B: y el sistema de doble en A:.
 - `STAT`, `SAVE` (escritura en la imagen) y scroll vertical por hardware.
+- SCREEN-PAC: la BIOS de OS1XUTLS la detecta, `SETUP` la configura a 104
+  columnas físicas y la pantalla pasa a 104 columnas.
 - Consola por el puerto serie (`STAT CON:=CRT:`) a 1200 baudios: el banco de
   pruebas hace de terminal, envía `DIR` y recibe el listado del directorio.
 
@@ -217,7 +252,7 @@ Las notas de desarrollo y lo pendiente están en `docs/PROGRESO.md`.
 ## Compilación
 
 Abre `Osborne.qpf` en Quartus Prime Lite 17.0 y compila. Resultado con 17.0.2:
-23 % de ALMs, 1,15 Mbit de BRAM y todos los relojes dentro de tiempos.
+23 % de ALMs, 1,25 Mbit de BRAM y todos los relojes dentro de tiempos.
 
 ## Créditos
 

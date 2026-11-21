@@ -16,7 +16,7 @@ following the Osborne 1 Technical Manual and the MAME `osborne1` driver.
 
 ## Features
 
-- Z80 at 3.9936 MHz (T80) with clock enables from a 31.95 MHz system clock.
+- Z80 at 3.9936 MHz (T80) with clock enables from a 31.94 MHz system clock.
 - 64 KB RAM, BIOS ROM 1.44 and the 7A3007-00 character generator.
 - **Memory banking** as on the real board: ROM/RAM mode (I/O ports 0/1), BIT 9
   attribute RAM (ports 2/3) and the UB4A/UB6A flip-flops that force ROM mode on
@@ -26,6 +26,9 @@ following the Osborne 1 Technical Manual and the MAME `osborne1` driver.
 - **Video**: 52 x 24 window over the 128 x 32 virtual screen, hardware
   horizontal and vertical scroll, half intensity, underline and block
   graphics. 15.6 kHz / 60 Hz, green, amber or white phosphor.
+- **SCREEN-PAC** (OSD option): Osborne's 104 column board. The CP/M SETUP
+  program detects it and offers 52, 80 or 104 physical columns. The video
+  output keeps the same timing in both modes, so the scaler never loses sync.
 - Two **MC6821 PIAs** (video/disk control and IEEE-488).
 - **WD1793/MB8877 floppy controller**, two drives, read and write. Single
   density (100 KB) and double density (200 KB) images; the BIOS detects the
@@ -36,7 +39,7 @@ following the Osborne 1 Technical Manual and the MAME `osborne1` driver.
 - Keyboard matrix from PS/2 and the beeper.
 - Verilator testbench that boots CP/M with real disk images.
 
-Not implemented: IEEE-488 devices, SCREEN-PAC / 80 column boards.
+Not implemented: IEEE-488 devices and the Nuevo Video 80 column board.
 
 ## Quick start
 
@@ -54,6 +57,10 @@ software selects low or high speed) and set the same speed in the MiSTer UART
 menu. In CP/M, `STAT CON:=CRT:` moves the console to the serial port;
 `RDR:=PTR:` and `PUN:=PTP:` are the serial reader and punch. See the Spanish
 README for details.
+
+**SCREEN-PAC**: enable it in the OSD and boot a CP/M disk whose BIOS supports
+it (for example the Osborne extended utilities disk). Run `SETUP`, choose
+*C Screen size*, then the physical width, and save to memory or disk.
 
 **Disk images and ROM dumps of software are not included**, except the BIOS
 and character ROMs already present in the original repository.

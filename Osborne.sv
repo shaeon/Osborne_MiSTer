@@ -215,6 +215,8 @@ localparam CONF_STR = {
 	"O[8:7],Serial speed,300/1200,600/2400,1200/4800,2400/9600;",
 	"O[9],Serial handshake,Off,On;",
 	"-;",
+	"O[10],SCREEN-PAC (104 col),Off,On;",
+	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
 	"I,F10 = Osborne RESET key;",
@@ -269,12 +271,13 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
-wire clk_sys;
+wire clk_sys, clk_vid;
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_sys)
+	.outclk_0(clk_sys),
+	.outclk_1(clk_vid)
 );
 
 reg reset;
@@ -296,7 +299,10 @@ assign UART_DTR = 1;
 osborne1 osborne1
 (
 	.clk_sys(clk_sys),
+	.clk_vid(clk_vid),
 	.reset(reset),
+
+	.screenpac(status[10]),
 
 	.ps2_key(ps2_key),
 
@@ -344,9 +350,9 @@ wire [7:0] B = (phos == 2) ? video : {2'b0, video[7:2]};
 wire [1:0] scale = status[6:5];
 assign VGA_SL = scale[1] ? scale : 2'd0;
 
-assign CLK_VIDEO = clk_sys;
+assign CLK_VIDEO = clk_vid;
 
-video_mixer #(.LINE_LENGTH(420), .GAMMA(1)) video_mixer
+video_mixer #(.LINE_LENGTH(840), .GAMMA(1)) video_mixer
 (
 	.CLK_VIDEO(CLK_VIDEO),
 	.CE_PIXEL(CE_PIXEL),

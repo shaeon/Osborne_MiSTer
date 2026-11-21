@@ -4,9 +4,11 @@
 // Referencias: driver osborne1 de MAME (Wilbert Pol, Vas Crabb) y
 // Osborne 1 Technical Manual.
 //
-// clk_sys = 31.9512 MHz (~2 x 15.9744 MHz; 50*131/5/41, +76 ppm)
+// clk_sys = 31.944 MHz (~2 x 15.9744 MHz; 50*115/6/30, -136 ppm)
+// clk_vid = 63.889 MHz (2 x clk_sys)
 //   CPU   : clk_sys/8 = 3.9936 MHz
-//   píxel : clk_sys/4 = 7.9872 MHz, 512 x 260 => 15.6 kHz / 60 Hz
+//   píxel : clk_vid/4 = 15.9744 MHz, 1024 x 260 => 15.6 kHz / 60 Hz
+//           (52 columnas con píxeles dobles, o 104 con la SCREEN-PAC)
 //
 // Mapa de memoria
 //   Modo RAM : 64 KB de RAM
@@ -19,7 +21,11 @@
 module osborne1
 (
 	input         clk_sys,
+	input         clk_vid,       // 2 x clk_sys, mismo PLL
 	input         reset,
+
+	// configuración
+	input         screenpac,     // placa SCREEN-PAC instalada
 
 	// teclado
 	input  [10:0] ps2_key,
@@ -67,7 +73,6 @@ reg [2:0] div;
 always @(posedge clk_sys) div <= div + 1'd1;
 
 wire cpu_ce = (div == 7);
-assign ce_pix = (div[1:0] == 3);
 
 //////////////////////////////////////////////////////////////////
 // CPU
@@ -176,6 +181,7 @@ wire cs_ieee = sel_io & (addr[11] == 1'b1) & (addr[8]  == 1'b1);
 wire cs_kbd  = sel_io & (addr[11] == 1'b0) & (addr[9]  == 1'b1);
 wire cs_acia = sel_io & (addr[11] == 1'b1) & (addr[9]  == 1'b1);
 wire cs_vpia = sel_io & (addr[11] == 1'b1) & (addr[10] == 1'b1);
+wire cs_spac = sel_io & (addr[11] == 1'b0) & (addr[10] == 1'b1) & screenpac;
 
 //////////////////////////////////////////////////////////////////
 // Memorias
@@ -198,7 +204,7 @@ always @(posedge clk_sys) begin
 	if(mem_wr & sel_ram) ram[addr] <= cpu_dout;
 	ram_q <= ram[addr];
 end
-always @(posedge clk_sys) vram_q <= ram[vaddr];
+always @(posedge clk_vid) vram_q <= ram[vaddr];
 
 // RAM de atributos 4K x 1
 reg        attr[4096];
@@ -207,7 +213,7 @@ always @(posedge clk_sys) begin
 	if(mem_wr & sel_attr) attr[addr[11:0]] <= cpu_dout[7];
 	attr_q <= attr[addr[11:0]];
 end
-always @(posedge clk_sys) vattr_q <= attr[vaddr[11:0]];
+always @(posedge clk_vid) vattr_q <= attr[vaddr[11:0]];
 
 //////////////////////////////////////////////////////////////////
 // Periféricos
@@ -410,7 +416,23 @@ wire [7:0] io_q = (cs_fdc  ? fdc_q[drv_sel] : 8'hFF) &
                   (cs_ieee ? ieee_q         : 8'hFF) &
                   (cs_kbd  ? kbd_q          : 8'hFF) &
                   (cs_acia ? acia_q         : 8'hFF) &
-                  (cs_vpia ? vpia_q         : 8'hFF);
+                  (cs_vpia ? vpia_q         : 8'hFF) &
+                  (cs_spac ? 8'hFB          : 8'hFF);   // SCREEN-PAC presente: D2 = 0
+
+//////////////////////////////////////////////////////////////////
+// SCREEN-PAC (2400): D0 = alta resolución (104 columnas), D1 = 0 -> HC-LEFT
+
+reg sp_hires, sp_hcleft;
+always @(posedge clk_sys) begin
+	if(reset | ~screenpac) begin
+		sp_hires  <= 0;
+		sp_hcleft <= 1;
+	end
+	else if(cs_spac & mem_wr_stb) begin
+		sp_hires  <= cpu_dout[0];
+		sp_hcleft <= ~cpu_dout[1];
+	end
+end
 
 //////////////////////////////////////////////////////////////////
 // Interrupciones (IM 2)
@@ -431,28 +453,49 @@ always @(*) begin
 end
 
 //////////////////////////////////////////////////////////////////
-// Vídeo: 52 x 24 caracteres de 8x10 sobre una pantalla virtual de 128 x 32
+// Vídeo: 52 (o 104) x 24 caracteres de 8x10 sobre una pantalla virtual de 128 x 32
+//
+// Siempre 1024 relojes de píxel de 15,9744 MHz por línea. En modo normal cada
+// celda dura 16 relojes (píxeles dobles); en alta resolución de la SCREEN-PAC,
+// 8. La zona visible es la misma (832 píxeles) en los dos modos.
 
-reg  [8:0] hcnt;    // 0..511
+reg  [1:0] vdiv;
+always @(posedge clk_vid) vdiv <= vdiv + 1'd1;
+assign ce_pix = (vdiv == 3);
+
+reg  [9:0] hcnt;    // 0..1023
 reg  [8:0] vcnt;    // 0..259
 reg  [3:0] ra;      // línea dentro del carácter
 reg  [4:0] trow;    // fila de texto
 reg  [4:0] scroll_y;
+reg        hires, hcleft;
 
 wire [6:0] scroll_x = vpia_pa[7:1];
-wire [6:0] col0     = scroll_x + 7'h0B;
+// Columna inicial (MAME): normal scroll_x + 0Bh; alta resolución
+// (scroll_x & 60h) + (HC-LEFT ? 09h : 01h) + 17h
+wire [6:0] col0  = scroll_x + 7'h0B;
+wire [6:0] col0h = (scroll_x & 7'h60) + (hcleft ? 7'h09 : 7'h01) + 7'h17;
+
+// celda actual, posición dentro de la celda y última posición
+wire [6:0] hcell = hires ? hcnt[9:3] : {1'b0, hcnt[9:4]};
+wire [3:0] sub  = hires ? {1'b0, hcnt[2:0]} : hcnt[3:0];
+wire       last = hires ? (hcnt[2:0] == 7) : (hcnt[3:0] == 15);
+// columna de texto de la celda siguiente: celdas visibles 1..52 / 2..105
+wire [6:0] ncol = hires ? (col0h + hcell - 1'd1) : (col0 + hcell);
 
 reg  [7:0] gfx_next, shift;
 reg        attr_next, attr_cur, ul_next;
 reg [10:0] cg_addr;
 reg  [7:0] cg_q;
-always @(posedge clk_sys) cg_q <= chargen[cg_addr];
+always @(posedge clk_vid) cg_q <= chargen[cg_addr];
 
-always @(posedge clk_sys) begin
+always @(posedge clk_vid) begin
 	if(ce_pix) begin
 		// contadores
-		if(hcnt == 511) begin
-			hcnt <= 0;
+		if(hcnt == 1023) begin
+			hcnt   <= 0;
+			hires  <= sp_hires;
+			hcleft <= sp_hcleft;
 			if(vcnt == 259) begin
 				vcnt     <= 0;
 				ra       <= 0;
@@ -470,9 +513,9 @@ always @(posedge clk_sys) begin
 		end
 		else hcnt <= hcnt + 1'd1;
 
-		// búsqueda del carácter de la celda siguiente (celda visible 1..52)
-		case(hcnt[2:0])
-			1: vaddr <= {4'hF, scroll_y + trow, col0 + hcnt[8:3]};
+		// búsqueda del carácter de la celda siguiente
+		case(sub)
+			1: vaddr <= {4'hF, scroll_y + trow, ncol};
 			3: begin
 					cg_addr   <= {ra, vram_q[6:0]};
 					ul_next   <= vram_q[7];
@@ -482,16 +525,16 @@ always @(posedge clk_sys) begin
 			default:;
 		endcase
 
-		if(hcnt[2:0] == 7) begin
+		if(last) begin
 			shift    <= gfx_next;
 			attr_cur <= attr_next;
 		end
-		else shift <= {shift[6:0], 1'b0};
+		else if(hires | hcnt[0]) shift <= {shift[6:0], 1'b0};
 
 		// sincronismos (valores de la posición siguiente)
-		hblank <= (hcnt < 7) || (hcnt >= 423);
-		hsync  <= (hcnt >= 455 && hcnt < 495);
-		if(hcnt == 511) begin
+		hblank <= (hcnt < 15) || (hcnt >= 847);
+		hsync  <= (hcnt >= 909 && hcnt < 989);
+		if(hcnt == 1023) begin
 			vblank <= (vcnt >= 239 && vcnt != 259);
 			vsync  <= (vcnt >= 243 && vcnt < 246);
 		end
@@ -499,11 +542,17 @@ always @(posedge clk_sys) begin
 end
 
 // CA1 de la PIA de vídeo: flanco de subida al empezar el borrado vertical
-always @(posedge clk_sys) vbl_int <= vblank;
+reg [1:0] vbl_s;
+always @(posedge clk_sys) begin
+	vbl_s   <= {vbl_s[0], vblank};
+	vbl_int <= vbl_s[1];
+end
 
 assign video = (~hblank & ~vblank & shift[7]) ? (attr_cur ? 8'hFF : 8'hB0) : 8'h00;
 
 // Zumbador: activo 4 de cada 10 líneas cuando PB5 = 1
-assign speaker = vpia_pb[5] & ra[2];
+reg ra2_s;
+always @(posedge clk_sys) ra2_s <= ra[2];
+assign speaker = vpia_pb[5] & ra2_s;
 
 endmodule
