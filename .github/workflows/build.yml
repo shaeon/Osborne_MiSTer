@@ -16,7 +16,7 @@ name: Build
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     tags: ['v*']
     paths-ignore:
       - '**.md'
@@ -25,7 +25,7 @@ on:
       - 'sim/**'
       - 'tools/**'
   pull_request:
-    branches: [master]
+    branches: [main]
     paths-ignore:
       - '**.md'
       - 'releases/**'

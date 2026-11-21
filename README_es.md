@@ -9,10 +9,11 @@ densidad.
 
 ## Origen
 
-Este repositorio es un fork de
+Este repositorio nació como fork de
 [jackpot51/Osborne_MiSTer](https://github.com/jackpot51/Osborne_MiSTer), de
-Jeremy Soller, que empezó el proyecto: CPU, ROMs y el vídeo de texto. Aquel core
-no pasaba de la pantalla inicial porque le faltaba casi todo el hardware:
+Jeremy Soller, que empezó el proyecto (CPU, ROMs y el vídeo de texto); sus
+commits siguen en el historial. Aquel core no pasaba de la pantalla inicial
+porque le faltaba casi todo el hardware:
 
 - No había controlador de disquete, ni PIAs, ni ACIA.
 - El cambio de banco de memoria no era el de la placa real.
@@ -257,7 +258,7 @@ Abre `Osborne.qpf` en Quartus Prime Lite 17.0 y compila. Resultado con 17.0.2:
 También se compila solo en GitHub Actions (`.github/workflows/build.yml`) con
 la imagen Docker `raetro/quartus:17.0`:
 
-- Cada push o pull request a `master` compila y deja el `.rbf` y los informes
+- Cada push o pull request a `main` compila y deja el `.rbf` y los informes
   en la pestaña *Actions* (no compila si solo cambian la documentación, `sim/`,
   `tools/` o `releases/`).
 - Se puede lanzar a mano desde *Actions > Build > Run workflow*.

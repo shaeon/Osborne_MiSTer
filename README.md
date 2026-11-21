@@ -7,11 +7,12 @@ An FPGA implementation of the **Osborne 1** (1981), the first commercially
 successful portable computer, for the **MiSTer** platform. It runs the original
 BIOS ROM 1.44 and boots CP/M 2.2 from single and double density disk images.
 
-This repository is a fork of
+This repository started as a fork of
 [jackpot51/Osborne_MiSTer](https://github.com/jackpot51/Osborne_MiSTer) by
-Jeremy Soller, who started the project (CPU, ROMs and text video). That core did
-not get past the start-up screen: there was no disk controller, no PIAs, no
-interrupts and the memory banking was incomplete. The machine has been rewritten
+Jeremy Soller, who started the project (CPU, ROMs and text video); his commits
+are kept in the history. That core did not get past the start-up screen: there
+was no disk controller, no PIAs, no interrupts and the memory banking was
+incomplete. The machine has been rewritten
 following the Osborne 1 Technical Manual and the MAME `osborne1` driver.
 
 ## Features
@@ -68,7 +69,7 @@ and character ROMs already present in the original repository.
 ## Building
 
 Open `Osborne.qpf` in Quartus Prime Lite 17.0, or let GitHub Actions build it:
-every push to `master` leaves the `.rbf` in the *Actions* tab, and pushing a
+every push to `main` leaves the `.rbf` in the *Actions* tab, and pushing a
 `v*` tag creates a release.
 
 ## Credits
