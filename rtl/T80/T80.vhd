@@ -183,10 +183,17 @@ architecture rtl of T80 is
 	signal XY_Ind               : std_logic;
 	signal No_BTR               : std_logic;
 	signal BTR_r                : std_logic;
+	signal BTR_r2               : std_logic;
 	signal Auto_Wait            : std_logic;
 	signal Auto_Wait_t1         : std_logic;
 	signal Auto_Wait_t2         : std_logic;
 	signal IncDecZ              : std_logic;
+	signal last_B               : std_logic_vector(7 downto 0);
+
+	-- Q register for Zilog SCF/CCF undocumented flag behavior
+	-- Captures F[5,3] (YF,XF) after flag-modifying instructions
+	signal Q_reg                : std_logic_vector(7 downto 0);
+	signal F_last               : std_logic_vector(7 downto 0);
 
 	-- ALU signals
 	signal BusB                 : std_logic_vector(7 downto 0);
@@ -233,8 +240,6 @@ architecture rtl of T80 is
 	signal LDHLSP               : std_logic;
 	signal ADDSPdd              : std_logic;
 	signal IORQ_i               : std_logic;
-	signal Write_i              : std_logic;
-	signal NoRead_i             : std_logic;
 	signal Special_LD           : std_logic_vector(2 downto 0);
 	signal ExchangeDH           : std_logic;
 	signal ExchangeRp           : std_logic;
@@ -263,8 +268,6 @@ architecture rtl of T80 is
 	signal XYbit_undoc          : std_logic;
 	signal No_PC                : std_logic;
 	signal DOR                  : std_logic_vector(127 downto 0);
-
-	signal Really_Wait          : std_logic;
 
 begin
 
@@ -342,8 +345,8 @@ begin
 			SetEI       => SetEI,
 			IMode       => IMode,
 			Halt        => Halt,
-			NoRead      => NoRead_i,
-			Write       => Write_i,
+			NoRead      => NoRead,
+			Write       => Write,
 			R800_mode   => R800_mode,
 			No_PC       => No_PC,
 			XYbit_undoc => XYbit_undoc);
@@ -374,8 +377,6 @@ begin
 			Q       => ALU_Q,
 			F_Out   => F_Out);
 
-	Really_Wait <= not Wait_n and (Write_i or not NoRead_i);
-
 	ClkEn <= CEN and not BusAck;
 
 	T_Res <= '1' when TState = unsigned(TStates) else '0';
@@ -391,6 +392,7 @@ begin
 
 	process (RESET_n, CLK_n)
 		variable n : std_logic_vector(7 downto 0);
+		variable pc_tmp : unsigned(15 downto 0);
 		variable ioq : std_logic_vector(8 downto 0);
 		variable temp_c : unsigned(8 downto 0);
 		variable temp_h : unsigned(4 downto 0);
@@ -423,12 +425,15 @@ begin
 			Read_To_Reg_r <= "00000";
 			Arith16_r <= '0';
 			BTR_r <= '0';
+			BTR_r2 <= '0';
 			Z16_r <= '0';
 			ALU_Op_r <= "0000";
 			Save_ALU_r <= '0';
 			PreserveC_r <= '0';
 			XY_Ind <= '0';
 			I_RXDD <= '0';
+			Q_reg <= (others => '0');
+			F_last <= (others => '1');
 
 		elsif rising_edge(CLK_n) then
 
@@ -543,6 +548,7 @@ begin
 
 					if T_Res = '1' then
 						BTR_r <= (I_BT or I_BC or I_BTR) and not No_BTR;
+						BTR_r2 <= I_BTR;
 						if Jump = '1' then
 							A(15 downto 8) <= DI_Reg;
 							A(7 downto 0) <= WZ(7 downto 0);
@@ -667,34 +673,47 @@ begin
 								F(Flag_N) <= '1';
 							end if;
 							if I_CCF = '1' then
-								-- CCF
+								-- CCF: Zilog Z80 behavior
+								-- Undocumented YF/XF: (A | (F & ~Q)) & 0x28
 								F(Flag_C) <= not F(Flag_C);
-								F(Flag_Y) <= ACC(5);
+								F(Flag_Y) <= ACC(5) or (F(Flag_Y) and not Q_reg(Flag_Y));
 								F(Flag_H) <= F(Flag_C);
-								F(Flag_X) <= ACC(3);
+								F(Flag_X) <= ACC(3) or (F(Flag_X) and not Q_reg(Flag_X));
 								F(Flag_N) <= '0';
+								Q_reg(Flag_Y) <= ACC(5) or (F(Flag_Y) and not Q_reg(Flag_Y));
+								Q_reg(Flag_X) <= ACC(3) or (F(Flag_X) and not Q_reg(Flag_X));
 							end if;
 							if I_SCF = '1' then
-								-- SCF
+								-- SCF: Zilog Z80 behavior
+								-- Undocumented YF/XF: (A | (F & ~Q)) & 0x28
 								F(Flag_C) <= '1';
-								F(Flag_Y) <= ACC(5);
+								F(Flag_Y) <= ACC(5) or (F(Flag_Y) and not Q_reg(Flag_Y));
 								F(Flag_H) <= '0';
-								F(Flag_X) <= ACC(3);
+								F(Flag_X) <= ACC(3) or (F(Flag_X) and not Q_reg(Flag_X));
 								F(Flag_N) <= '0';
+								Q_reg(Flag_Y) <= ACC(5) or (F(Flag_Y) and not Q_reg(Flag_Y));
+								Q_reg(Flag_X) <= ACC(3) or (F(Flag_X) and not Q_reg(Flag_X));
 							end if;
 						end if;
 					end if;
 
-					if (TState = 2 and Really_Wait = '0' and I_BTR = '1' and IR(0) = '1') or (TState = 1 and I_BTR = '1' and IR(0) = '0') then
-						ioq := ('0' & DI_Reg) + ('0' & std_logic_vector(ID16(7 downto 0)));
+					if (TState = 2 and I_BTR = '1' and IR(0) = '1') or (TState = 1 and I_BTR = '1' and IR(0) = '0') then
+						-- INI/IND (IR(0)=0): T = M + (C±1), WZ(7:0) has C±1 from MCycle 1
+						-- OUTI/OUTD (IR(0)=1): T = M + L, ID16(7:0) has L±1
+						if IR(0) = '0' then
+							ioq := ('0' & DI_Reg) + ('0' & WZ(7 downto 0));
+						else
+							ioq := ('0' & DI_Reg) + ('0' & std_logic_vector(ID16(7 downto 0)));
+						end if;
 						F(Flag_N) <= DI_Reg(7);
 						F(Flag_C) <= ioq(8);
 						F(Flag_H) <= ioq(8);
 						ioq := (ioq and "000000111") xor ('0'&BusA);
 						F(Flag_P) <= not (ioq(0) xor ioq(1) xor ioq(2) xor ioq(3) xor ioq(4) xor ioq(5) xor ioq(6) xor ioq(7));
+						last_B <= BusA;
 					end if;
 
-					if TState = 2 and Really_Wait = '0' then
+					if TState = 2 and Wait_n = '1' then
 						if ISet = "01" and MCycle = "111" then
 							IR <= DInst;
 						end if;
@@ -705,7 +724,27 @@ begin
 							PC <= PC + 1;
 						end if;
 						if BTR_r = '1' then
-							PC <= PC - 2;
+							pc_tmp := PC - 2;
+ 							PC <= pc_tmp;
+							WZ <= std_logic_vector(PC)-"1";
+							F(Flag_X) <= pc_tmp(11);
+							F(Flag_Y) <= pc_tmp(13);
+							if BTR_r2 = '1' then
+								-- INIR/INDR/OTIR/OTDR repeat: adjust HF and PF
+								-- balu = B-1 if CF&NF, B+1 if CF&!NF, else B
+								n := last_B;
+								if F(Flag_C) = '1' then
+									if F(Flag_N) = '1' then
+										F(Flag_H) <= not (last_B(0) or last_B(1) or last_B(2) or last_B(3));
+										n := last_B - "1";
+									else
+										F(Flag_H) <= last_B(0) and last_B(1) and last_B(2) and last_B(3);
+										n := last_B + "1";
+									end if;
+								end if;
+								-- PF: XOR with parity of (balu & 7)
+								F(Flag_P) <= F(Flag_P) xor (n(0) xor n(1) xor n(2));
+							end if;
 						end if;
 						if RstP = '1' then
 							WZ <= (others =>'0');
@@ -722,7 +761,7 @@ begin
 						end if;
 					end if;
 
-					if (TState = 2 and Really_Wait = '0') or (TState = 4 and MCycle = "001") then
+					if (TState = 2 and Wait_n = '1') or (TState = 4 and MCycle = "001") then
 						if IncDec_16(2 downto 0) = "111" then
 							if IncDec_16(3) = '1' then
 								SP <= SP - 1;
@@ -896,6 +935,23 @@ begin
 						DO <= ALU_Q;
 					end if;
 				end if;
+
+				-- Q register update for Zilog SCF/CCF behavior
+				-- At end of instruction: if flags changed, Q = F & 0x28
+				-- If flags didn't change and not SCF/CCF, Q = 0
+				-- SCF/CCF update Q internally, so skip them here
+				if T_Res = '1' and Mode /= 3 then
+					if I_SCF = '0' and I_CCF = '0' then
+						if F /= F_last then
+							Q_reg(Flag_Y) <= F(Flag_Y);
+							Q_reg(Flag_X) <= F(Flag_X);
+						else
+							Q_reg(Flag_Y) <= '0';
+							Q_reg(Flag_X) <= '0';
+						end if;
+					end if;
+					F_last <= F;
+				end if;
 			end if;
 		end if;
 	end process;
@@ -1011,7 +1067,7 @@ begin
 			signed(RegBusA) + 1;
 
 	process (Save_ALU_r, Auto_Wait_t1, ALU_OP_r, Read_To_Reg_r, I_MULU, T_Res,
-			ExchangeDH, ExchangeWH, IncDec_16, MCycle, TState, Really_Wait, LDHLSP)
+			ExchangeDH, ExchangeWH, IncDec_16, MCycle, TState, Wait_n, LDHLSP)
 	begin
 		RegWEH <= '0';
 		RegWEL <= '0';
@@ -1040,7 +1096,7 @@ begin
 			RegWEL <= '1';
 		end if;
 
-		if IncDec_16(2) = '1' and ((TState = 2 and Really_Wait = '0' and MCycle /= "001") or (TState = 3 and MCycle = "001")) then
+		if IncDec_16(2) = '1' and ((TState = 2 and Wait_n = '1' and MCycle /= "001") or (TState = 3 and MCycle = "001")) then
 			case IncDec_16(1 downto 0) is
 			when "00" | "01" | "10" =>
 				RegWEH <= '1';
@@ -1053,7 +1109,7 @@ begin
 	TmpAddr2 <= std_logic_vector(unsigned(signed(SP) + signed(Save_Mux)));
 
 	process (Save_Mux, RegBusB, RegBusA_r, ID16, I_MULU, MULU_Prod32, MULU_tmp, T_Res,
-			ExchangeDH, ExchangeWH, IncDec_16, MCycle, TState, Really_Wait, LDHLSP, TmpAddr2, WZ)
+			ExchangeDH, ExchangeWH, IncDec_16, MCycle, TState, Wait_n, LDHLSP, TmpAddr2, WZ)
 	begin
 		RegDIH <= Save_Mux;
 		RegDIL <= Save_Mux;
@@ -1210,8 +1266,6 @@ begin
 	IntCycle_n <= not IntCycle;
 	IntE <= IntE_FF1;
 	IORQ <= IORQ_i;
-	NoRead <= NoRead_i;
-	Write <= Write_i;
 	Stop <= I_DJNZ;
 -------------------------------------------------------------------------
 --
@@ -1283,7 +1337,7 @@ begin
 					if BusReq_s = '1' and BusAck = '1' then
 					else
 						BusAck <= '0';
-						if TState = 2 and Really_Wait = '1' then
+						if TState = 2 and Wait_n = '0' then
 						elsif T_Res = '1' then
 							if Halt = '1' and  ( not(Mode = 3 and INT_n = '0' and IntE_FF1 = '0')) then  -- halt bug when Mode = 3 , INT_n = '0' and IME=0
 								Halt_FF <= '1';

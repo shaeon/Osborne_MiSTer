@@ -1,0 +1,9 @@
+obj/
+t80s.v
+work-obj08.cf
+rom
+*.img
+*.out
+*.pgm
+*.png
+fetch.txt

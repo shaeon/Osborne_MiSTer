@@ -181,21 +181,19 @@ assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;  
 
-assign VGA_SL = 0;
 assign VGA_F1 = 0;
 assign VGA_SCALER  = 0;
 assign VGA_DISABLE = 0;
 assign HDMI_FREEZE = 0;
 assign HDMI_BLACKOUT = 0;
 
-assign AUDIO_S = 0;
-assign AUDIO_L = 0;
-assign AUDIO_R = 0;
+assign AUDIO_S   = 0;
 assign AUDIO_MIX = 0;
+assign AUDIO_L   = {1'b0, speaker, 14'd0};
+assign AUDIO_R   = AUDIO_L;
 
-assign LED_DISK = 0;
 assign LED_POWER = 0;
-assign BUTTONS = 0;
+assign BUTTONS   = 0;
 
 //////////////////////////////////////////////////////////////////
 
@@ -208,53 +206,63 @@ assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 localparam CONF_STR = {
 	"Osborne;;",
 	"-;",
+	"S0,IMGDSK,Drive A:;",
+	"S1,IMGDSK,Drive B:;",
+	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"O[2],TV Mode,NTSC,PAL;",
-	"O[4:3],Color,White,Red,Green,Blue;",
-	"-;",
-	"P1,Test Page 1;",
-	"P1-;",
-	"P1-, -= Options in page 1 =-;",
-	"P1-;",
-	"P1O[5],Option 1-1,Off,On;",
-	"d0P1F1,BIN;",
-	"H0P1O[10],Option 1-2,Off,On;",
-	"-;",
-	"P2,Test Page 2;",
-	"P2-;",
-	"P2-, -= Options in page 2 =-;",
-	"P2-;",
-	"P2S0,DSK;",
-	"P2O[7:6],Option 2,1,2,3,4;",
-	"-;",
+	"O[4:3],Phosphor,Green,Amber,White;",
+	"O[6:5],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
-	"v,0;", // [optional] config version 0-99. 
-	        // If CONF_STR options are changed in incompatible way, then change version number too,
-			  // so all options will get default values on first start.
+	"I,F10 = Osborne RESET key;",
+	"v,0;",
 	"V,v",`BUILD_DATE 
 };
 
-wire forced_scandoubler;
+wire         forced_scandoubler;
 wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
+wire  [21:0] gamma_bus;
 
-hps_io #(.CONF_STR(CONF_STR)) hps_io
+wire  [1:0] img_mounted;
+wire        img_readonly;
+wire [63:0] img_size;
+wire [31:0] sd_lba[2];
+wire  [1:0] sd_rd, sd_wr, sd_ack;
+wire  [8:0] sd_buff_addr;
+wire  [7:0] sd_buff_dout;
+wire  [7:0] sd_buff_din[2];
+wire        sd_buff_wr;
+
+hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 	.EXT_BUS(),
-	.gamma_bus(),
+	.gamma_bus(gamma_bus),
 
 	.forced_scandoubler(forced_scandoubler),
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({status[5]}),
-	
-	.ps2_key(ps2_key)
+	.status_menumask(16'd0),
+
+	.ps2_key(ps2_key),
+
+	.img_mounted(img_mounted),
+	.img_readonly(img_readonly),
+	.img_size(img_size),
+	.sd_lba(sd_lba),
+	.sd_blk_cnt('{6'd0, 6'd0}),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din),
+	.sd_buff_wr(sd_buff_wr)
 );
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -267,47 +275,90 @@ pll pll
 	.outclk_0(clk_sys)
 );
 
-wire reset = RESET | status[0] | buttons[1];
+reg reset;
+always @(posedge clk_sys) reset <= RESET | status[0] | buttons[1];
 
-wire [1:0] col = status[4:3];
+//////////////////////////////////////////////////////////////////
 
-wire HBlank;
-wire HSync;
-wire VBlank;
-wire VSync;
+wire HBlank, HSync, VBlank, VSync;
 wire ce_pix;
 wire [7:0] video;
+wire speaker;
+wire [1:0] fdd_led;
 
-mycore mycore
+osborne1 osborne1
 (
-	.clk(clk_sys),
+	.clk_sys(clk_sys),
 	.reset(reset),
-	
-	.pal(status[2]),
-	.scandouble(forced_scandoubler),
+
+	.ps2_key(ps2_key),
 
 	.ce_pix(ce_pix),
+	.hsync(HSync),
+	.vsync(VSync),
+	.hblank(HBlank),
+	.vblank(VBlank),
+	.video(video),
 
-	.HBlank(HBlank),
-	.HSync(HSync),
-	.VBlank(VBlank),
-	.VSync(VSync),
+	.speaker(speaker),
 
-	.video(video)
+	.img_mounted(img_mounted),
+	.img_readonly(img_readonly),
+	.img_size(img_size),
+	.sd_lba(sd_lba),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din),
+	.sd_buff_wr(sd_buff_wr),
+
+	.fdd_led(fdd_led)
 );
 
+assign LED_DISK  = {1'b0, |fdd_led};
+assign LED_USER  = |fdd_led;
+
+// Color del fósforo
+wire [1:0] phos = status[4:3];
+wire [7:0] R = (phos == 1) ? video : (phos == 2) ? video : {1'b0, video[7:1]} - {3'b0, video[7:3]};
+wire [7:0] G = (phos == 1) ? {1'b0, video[7:1]} + {2'b0, video[7:2]} : video;
+wire [7:0] B = (phos == 2) ? video : {2'b0, video[7:2]};
+
+wire [1:0] scale = status[6:5];
+assign VGA_SL = scale[1] ? scale : 2'd0;
+
 assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL = ce_pix;
 
-assign VGA_DE = ~(HBlank | VBlank);
-assign VGA_HS = HSync;
-assign VGA_VS = VSync;
-assign VGA_G  = (!col || col == 2) ? video : 8'd0;
-assign VGA_R  = (!col || col == 1) ? video : 8'd0;
-assign VGA_B  = (!col || col == 3) ? video : 8'd0;
+video_mixer #(.LINE_LENGTH(420), .GAMMA(1)) video_mixer
+(
+	.CLK_VIDEO(CLK_VIDEO),
+	.CE_PIXEL(CE_PIXEL),
+	.ce_pix(ce_pix),
 
-reg  [26:0] act_cnt;
-always @(posedge clk_sys) act_cnt <= act_cnt + 1'd1; 
-assign LED_USER    = act_cnt[26]  ? act_cnt[25:18]  > act_cnt[7:0]  : act_cnt[25:18]  <= act_cnt[7:0];
+	.scandoubler(scale || forced_scandoubler),
+	.hq2x(scale == 1),
+	.gamma_bus(gamma_bus),
+
+	.R(R),
+	.G(G),
+	.B(B),
+
+	.HSync(HSync),
+	.VSync(VSync),
+	.HBlank(HBlank),
+	.VBlank(VBlank),
+
+	.HDMI_FREEZE(HDMI_FREEZE),
+	.freeze_sync(),
+
+	.VGA_R(VGA_R),
+	.VGA_G(VGA_G),
+	.VGA_B(VGA_B),
+	.VGA_VS(VGA_VS),
+	.VGA_HS(VGA_HS),
+	.VGA_DE(VGA_DE)
+);
 
 endmodule
