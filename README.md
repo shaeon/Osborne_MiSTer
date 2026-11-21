@@ -66,6 +66,14 @@ it (for example the Osborne extended utilities disk). Run `SETUP`, choose
 **Disk images and ROM dumps of software are not included**, except the BIOS
 and character ROMs already present in the original repository.
 
+## Chameleon96
+
+The Chameleon96 version lives in
+[shaeon/Osborne_MiSTer_ch96](https://github.com/shaeon/Osborne_MiSTer_ch96).
+It follows this repository automatically: only the board wrapper and the MiSTer
+framework differ, the machine is the same. Its RBF files are named
+`Osborne_YYYYMMDD_ch96.rbf`.
+
 ## Building
 
 Open `Osborne.qpf` in Quartus Prime Lite 17.0, or let GitHub Actions build it:
@@ -80,6 +88,8 @@ every push to `main` leaves the `.rbf` in the *Actions* tab, and pushing a
 - **wd1793**: Viacheslav Slavinsky and Sorgelig, adapted here for the Osborne
   disk formats.
 - **MiSTer framework** (`sys/`): Sorgelig and the MiSTer-devel community.
+- **Chameleon96 port**: Maverick (Maverick-Shark), from his TS2068_MiSTer
+  `ch96` branch; board documentation by Manuel Teira (teiram).
 - **MAME** `osborne1` driver (Wilbert Pol, Vas Crabb and the MAME team): main
   hardware reference.
 

@@ -6,6 +6,9 @@
 # - push / pull request: compila y sube el resultado (pestana Actions).
 # - Lanzar a mano: Actions > Build > Run workflow.
 # - Release: git tag v1.0 && git push origin v1.0
+# - Solo se ejecuta en shaeon/Osborne_MiSTer. El repositorio de la Chameleon96
+#   (shaeon/Osborne_MiSTer_ch96) se sincroniza con este y lleva este mismo
+#   fichero sin cambios, pero alli compila su propio workflow (build_ch96.yml).
 #
 # Node.js: GitHub ha retirado Node 20 en los runners. Todas las acciones van en
 # versiones que ya funcionan con Node 24 (checkout@v6, upload-artifact@v6,
@@ -42,6 +45,7 @@ env:
 
 jobs:
   build:
+    if: github.repository == 'shaeon/Osborne_MiSTer'
     runs-on: ubuntu-latest
     timeout-minutes: 150
 

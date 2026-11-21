@@ -250,6 +250,17 @@ Comprobado en simulación:
 
 Las notas de desarrollo y lo pendiente están en `docs/PROGRESO.md`.
 
+## Chameleon96
+
+La versión para la Chameleon96 está en
+[shaeon/Osborne_MiSTer_ch96](https://github.com/shaeon/Osborne_MiSTer_ch96).
+Ese repositorio se sincroniza solo con este cada noche: trae los cambios de
+`main`, quita los RBF de la DE10-Nano y compila la versión de la Chameleon96.
+La máquina es la misma; solo cambian la capa de la placa y el framework de
+MiSTer. Sus RBF se llaman `Osborne_AAAAMMDD_ch96.rbf`, con el sufijo al
+final como los demás cores de la Chameleon96. Los detalles están en su
+`README_ch96.md`.
+
 ## Compilación
 
 Abre `Osborne.qpf` en Quartus Prime Lite 17.0 y compila. Resultado con 17.0.2:
@@ -279,6 +290,8 @@ la imagen Docker `raetro/quartus:17.0`:
 - **wd1793**: Viacheslav Slavinsky y Sorgelig, adaptado aquí a los formatos
   del Osborne. GPL.
 - **Framework de MiSTer** (`sys/`): Sorgelig y la comunidad MiSTer-devel.
+- **Port a Chameleon96**: Maverick (Maverick-Shark), a partir de su rama
+  `ch96` de TS2068_MiSTer; documentación de la placa de Manuel Teira (teiram).
 
 **Referencias**
 

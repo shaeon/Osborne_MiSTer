@@ -87,3 +87,20 @@ Siguiente: SCREEN-PAC.
 - Quartus 17.0.2: clk_vid +4,1 ns, clk_sys +8,6 ns, 23 % ALMs
 
 Pendiente: Nuevo Video (necesita monrom 1.51), IEEE-488.
+
+## Chameleon96 (21/11/2026): repositorio aparte
+
+- shaeon/Osborne_MiSTer_ch96: este repositorio + capa de la placa
+  (ch96_top.sv, Osborne_ch96.qpf/.qsf/.sdc, sys/pins_ch96.tcl,
+  sys/hps_ch96.tcl, sys/pll_q22.qip y cambios en sys_top.v, sysmem.sv,
+  pll_hdmi, sys.qip y Osborne.qsf), basado en la rama ch96 de TS2068_MiSTer
+  (Maverick)
+- Se sincroniza solo (sync.yml, cada noche o a mano): merge de main, quita
+  los RBF que no terminan en _ch96.rbf, resuelve solos los conflictos en
+  releases/ y lanza build_ch96.yml; otros conflictos los avisa y para
+- build_ch96.yml compila Osborne_ch96, guarda Osborne_AAAAMMDD_ch96.rbf en
+  releases/ y crea Releases con las etiquetas v*
+- build.yml de este repositorio solo corre en shaeon/Osborne_MiSTer, así que
+  viaja sin cambios al de la ch96 y no provoca conflictos
+- Quartus 17.0.2: Osborne_ch96 compila con holgura positiva en todos los
+  relojes (peor setup +4,0 ns); sin probar en la placa
