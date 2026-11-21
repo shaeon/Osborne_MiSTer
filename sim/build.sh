@@ -12,4 +12,4 @@ sed -i "${L}s/alu_q;/alu_q_inst;/; s/assign alu_n371 = alu_q;/assign alu_n371 = 
 ln -sfn ../rom rom
 verilator --cc --exe --build -O3 --x-assign fast --x-initial fast -j 4 --top-module osborne1 +1364-2005ext+v \
   -Wno-fatal -Wno-lint -Wno-style -CFLAGS -O2 -Mdir obj pub.vlt t80s.v \
-  $R/pia6821.sv $R/osb_keyboard.sv $R/wd1793.sv $R/osborne1.sv tb.cpp -o vsim
+  $R/pia6821.sv $R/acia6850.sv $R/osb_keyboard.sv $R/wd1793.sv $R/osborne1.sv tb.cpp -o vsim

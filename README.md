@@ -30,10 +30,13 @@ following the Osborne 1 Technical Manual and the MAME `osborne1` driver.
 - **WD1793/MB8877 floppy controller**, two drives, read and write. Single
   density (100 KB) and double density (200 KB) images; the BIOS detects the
   density by itself, as on real hardware.
+- **Serial port**: MC6850 ACIA with the board's baud rate clock (300/1200,
+  600/2400, 1200/4800 or 2400/9600 jumper settings), interrupts and modem
+  lines, connected to the MiSTer UART.
 - Keyboard matrix from PS/2 and the beeper.
 - Verilator testbench that boots CP/M with real disk images.
 
-Not implemented: serial port, IEEE-488 devices, SCREEN-PAC / 80 column boards.
+Not implemented: IEEE-488 devices, SCREEN-PAC / 80 column boards.
 
 ## Quick start
 
@@ -45,6 +48,12 @@ Not implemented: serial port, IEEE-488 devices, SCREEN-PAC / 80 column boards.
 
 **F10** is the front panel RESET button. Backspace is cursor left and Caps Lock
 is ALPHA LOCK.
+
+**Serial port**: choose the speed pair in the OSD (the Osborne jumpers; the
+software selects low or high speed) and set the same speed in the MiSTer UART
+menu. In CP/M, `STAT CON:=CRT:` moves the console to the serial port;
+`RDR:=PTR:` and `PUN:=PTP:` are the serial reader and punch. See the Spanish
+README for details.
 
 **Disk images and ROM dumps of software are not included**, except the BIOS
 and character ROMs already present in the original repository.

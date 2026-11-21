@@ -5,6 +5,7 @@ set_global_assignment -name VHDL_FILE rtl/T80/T80_Reg.vhd
 set_global_assignment -name VHDL_FILE rtl/T80/T80.vhd
 set_global_assignment -name VHDL_FILE rtl/T80/T80s.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/pia6821.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/acia6850.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/osb_keyboard.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/wd1793.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/osborne1.sv

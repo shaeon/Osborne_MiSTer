@@ -43,3 +43,32 @@ Comprobado en simulación (Verilator, `sim/`):
 - Quartus Prime Lite 17.0.2, MiSTer (5CSEBA6): 23 % ALMs, 1,15 Mbit de BRAM
 - Todos los relojes cumplen tiempos (clk_sys 31,95 MHz: holgura setup +15,0 ns, hold +0,25 ns)
 - RBF: `releases/Osborne_20261121.rbf`
+
+## Siguiente fase (21/11/2026)
+
+Plan acordado para revisar:
+1. Puerto serie: ACIA 6850 real con el reloj de baudios de la placa (pares
+   300/1200, 600/2400, 1200/4800, 2400/9600 como en MAME), IRQ con vector FC,
+   DCD/CTS y RI (a CA2 de la PIA de vídeo), conectada al UART de MiSTer.
+2. SCREEN-PAC (52/104 columnas): misma ROM 1.44; registro en 2400 (bit 0
+   resolución, bit 1 HC-LEFT), presencia leyendo 2400 con bit 2 a 0. La CP/M
+   de OS1XUTLS lo detecta y su SETUP elige el tamaño de pantalla. Salida de
+   vídeo siempre a 15,97 MHz (modo normal con píxeles dobles) para no cambiar
+   de resolución.
+3. Nuevo Video (80x24 con SY6545): opcional; necesita la ROM monrom 1.51 y
+   MAME lo tiene incompleto. El usuario tiene el disco OS1NUEVO (BIOS15).
+4. IEEE-488: no prioritario (impresoras y unidades IEEE).
+
+## Puerto serie (21/11/2026): hecho
+
+- `rtl/acia6850.sv`: ACIA completa (formatos, ÷1/÷16/÷64, paridad, FE/OVRN,
+  TDRE bloqueado por /CTS, IRQ por RDRF/OVRN/DCD y TDRE)
+- Reloj de baudios como en MAME, con el bug original de 600/2400 (650/2600)
+- OSD: *Serial speed* (status[8:7]) y *Serial handshake* (status[9])
+- CONF_STR declara las velocidades del UART de MiSTer
+- RI del RS-232 va a CA2 de la PIA de vídeo (sin señal en MiSTer: a 1)
+- Comprobado: test unitario con iverilog y consola CP/M por serie (CON:=CRT:)
+  en la simulación completa
+- La BIOS: CON: TTY = pantalla/teclado, CRT = serie; RDR: PTR y PUN: PTP = serie
+
+Siguiente: SCREEN-PAC.

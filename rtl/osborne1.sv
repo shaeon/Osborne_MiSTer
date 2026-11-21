@@ -35,6 +35,15 @@ module osborne1
 	// sonido
 	output        speaker,
 
+	// puerto serie (señales de módem activas a nivel bajo)
+	input   [1:0] serial_cfg,    // 0=300/1200 1=600/2400 2=1200/4800 3=2400/9600
+	input         ser_rxd,
+	output        ser_txd,
+	input         ser_cts_n,
+	input         ser_dcd_n,
+	input         ser_ri_n,
+	output        ser_rts_n,
+
 	// disquetes (2 unidades)
 	input   [1:0] img_mounted,
 	input         img_readonly,
@@ -243,7 +252,7 @@ pia6821 video_pia
 	.pb_i(8'hFF),
 	.pb_o(vpia_pb),
 	.ca1(vbl_int),
-	.ca2_i(1'b1),
+	.ca2_i(ser_ri_n),          // RI del RS-232
 	.ca2_o(),
 	.cb1(1'b1),
 	.cb2_i(1'b1),
@@ -280,9 +289,46 @@ pia6821 ieee_pia
 	.irqb()
 );
 
-// ACIA 6850 (2A00): sin puerto serie, transmisor siempre libre
-wire [7:0] acia_q   = addr[0] ? 8'h00 : 8'h02;
-wire       acia_irq = 0;
+// ACIA 6850 (2A00)
+// RxC/TxC sale del reloj maestro (15,9744 MHz) según los puentes de velocidad:
+// periodo = (p_low + p_high) * div ciclos maestros (MAME, Technical Manual).
+// 300/1200: 52*16, 600/2400: 24*16 (bug original, va un 8 % rápido),
+// 1200/4800: 13*16, 2400/9600: 13*8. clk_sys = 2 x maestro.
+reg [10:0] baud_cnt;
+reg        rxc_ce;
+wire [10:0] baud_div = (serial_cfg == 0) ? 11'd1663 :
+                       (serial_cfg == 1) ? 11'd767  :
+                       (serial_cfg == 2) ? 11'd415  : 11'd207;
+always @(posedge clk_sys) begin
+	rxc_ce <= 0;
+	if(baud_cnt >= baud_div) begin
+		baud_cnt <= 0;
+		rxc_ce   <= 1;
+	end
+	else baud_cnt <= baud_cnt + 1'd1;
+end
+
+wire [7:0] acia_q;
+wire       acia_irq;
+
+acia6850 acia
+(
+	.clk(clk_sys),
+	.reset(reset),
+	.cs(cs_acia),
+	.rd(mem_rd_stb),
+	.wr(mem_wr_stb),
+	.rs(addr[0]),
+	.din(cpu_dout),
+	.dout(acia_q),
+	.irq(acia_irq),
+	.rxc_ce(rxc_ce),
+	.rxd(ser_rxd),
+	.txd(ser_txd),
+	.cts_n(ser_cts_n),
+	.dcd_n(ser_dcd_n),
+	.rts_n(ser_rts_n)
+);
 
 // Controlador de disquete MB8877/WD1793, una instancia por unidad
 wire       dden_n = vpia_pa[0];          // 1 = simple densidad

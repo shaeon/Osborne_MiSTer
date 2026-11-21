@@ -63,12 +63,13 @@ La máquina se ha reescrito siguiendo el *Osborne 1 Technical Manual* y el drive
     Found*, y así la BIOS detecta la densidad sola, como en la máquina real.
     Se puede tener un disco de doble densidad en A: y uno de simple en B:.
   - Selección de unidad por los bits 6 y 7 del puerto B de la PIA de vídeo.
+- **Puerto serie**: ACIA MC6850 con el reloj de baudios de la placa, IRQ con
+  vector FC, /CTS, /DCD y RTS, conectada al UART de MiSTer (ver más abajo).
 - **Teclado**: matriz de 8 x 8 desde PS/2.
 - **Sonido**: el zumbador, activado por el bit 5 del puerto B y modulado por el
   contador de líneas (4 de cada 10), como el original.
 
-No implementado: puerto serie (la ACIA siempre indica transmisor libre),
-dispositivos IEEE-488, SCREEN-PAC y placas de 80 columnas.
+No implementado: dispositivos IEEE-488, SCREEN-PAC y placas de 80 columnas.
 
 ## Uso
 
@@ -107,6 +108,45 @@ Las teclas siguen el símbolo en un teclado de distribución estadounidense.
 | Teclado numérico | números, `.` e Intro |
 | **F10** | botón RESET del frontal |
 
+### Puerto serie
+
+El Osborne genera el reloj de la ACIA a partir del reloj maestro, y unos
+puentes en la placa eligen una pareja de velocidades. El software solo elige
+entre la lenta (divisor ÷64 de la ACIA) y la rápida (÷16); no puede saber qué
+puentes hay, así que el SETUP siempre las llama "300" y "1200".
+
+| OSD *Serial speed* | Lenta | Rápida |
+|----|----|----|
+| 300/1200 (por defecto) | 300 | 1200 |
+| 600/2400 | 650 | 2600 |
+| 1200/4800 | 1200 | 4800 |
+| 2400/9600 | 2400 | 9600 |
+
+En la pareja 600/2400 la placa original va un 8 % rápida (650 y 2600 baudios);
+el core lo reproduce, y por eso esas dos velocidades están en la lista del
+menú UART de MiSTer.
+
+Para usarlo:
+
+1. Elige la pareja en el OSD (*Serial speed*).
+2. En el menú del sistema de MiSTer (F12, *UART mode*), elige la conexión
+   (por ejemplo *Modem* para el módem por red) y **la misma velocidad** que
+   va a usar el Osborne. La ROM deja la ACIA en ÷16, 8N1: con el puente por
+   defecto son 1200 baudios.
+3. *Serial handshake* en *Off* da por activas /CTS y /DCD, para que el Osborne
+   pueda transmitir aunque no haya nada conectado. En *On* se usan las líneas
+   CTS y DSR del UART de MiSTer.
+
+En CP/M el puerto serie es el dispositivo `CRT:` de la consola, `PTR:` del
+lector y `PTP:` de la perforadora:
+
+```
+STAT CON:=CRT:      consola por el puerto serie
+STAT CON:=TTY:      consola en la pantalla y el teclado
+STAT RDR:=PTR:      lector por el puerto serie
+STAT PUN:=PTP:      perforadora por el puerto serie
+```
+
 ## Cómo funciona
 
 **CPU y memoria.** El T80 funciona con un clock enable cada 8 ciclos del reloj
@@ -139,6 +179,12 @@ leído al principio de cada cuadro; la columna, con el scroll horizontal más
 
 Hay una instancia por unidad, conectadas a dos imágenes del OSD.
 
+**Puerto serie.** Un contador genera el reloj RxC/TxC con el mismo periodo que
+la placa: (p_low + p_high) x divisor ciclos del reloj maestro, según la pareja
+elegida. La ACIA implementa todos los formatos de palabra, los divisores ÷1,
+÷16 y ÷64, paridad, errores de trama y desbordamiento, el bloqueo de TDRE con
+/CTS y la interrupción por flanco de /DCD.
+
 ## Pruebas
 
 En `sim/` hay un banco de pruebas de Verilator que ejecuta la máquina completa
@@ -152,7 +198,10 @@ cd sim && ./build.sh
 ```
 
 Opciones: `-a`/`-b` imágenes, `-t` segundos simulados, `-k tiempo texto`
-pulsaciones, `-v 1` traza del controlador de disco.
+pulsaciones, `-s tiempo texto` caracteres por el puerto serie, `-v 1` traza
+del controlador de disco y de la ACIA. Lo recibido por el puerto serie se
+muestra al final. Cada pulsación tarda 0,24 s: hay que dejar tiempo para que
+termine de escribirse una orden antes de la siguiente.
 
 Comprobado en simulación:
 
@@ -160,6 +209,8 @@ Comprobado en simulación:
 - Arranque de CP/M 2.2 desde disco de doble densidad y de simple densidad.
 - `DIR B:` con un disco de simple densidad en B: y el sistema de doble en A:.
 - `STAT`, `SAVE` (escritura en la imagen) y scroll vertical por hardware.
+- Consola por el puerto serie (`STAT CON:=CRT:`) a 1200 baudios: el banco de
+  pruebas hace de terminal, envía `DIR` y recibe el listado del directorio.
 
 Las notas de desarrollo y lo pendiente están en `docs/PROGRESO.md`.
 

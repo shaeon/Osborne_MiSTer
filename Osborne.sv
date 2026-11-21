@@ -176,7 +176,6 @@ module emu
 
 assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
-assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;  
@@ -204,7 +203,7 @@ assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 
 `include "build_id.v" 
 localparam CONF_STR = {
-	"Osborne;;",
+	"Osborne;UART1200:300:2400:600:4800:9600:2600:650;",
 	"-;",
 	"S0,IMGDSK,Drive A:;",
 	"S1,IMGDSK,Drive B:;",
@@ -212,6 +211,9 @@ localparam CONF_STR = {
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[4:3],Phosphor,Green,Amber,White;",
 	"O[6:5],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
+	"-;",
+	"O[8:7],Serial speed,300/1200,600/2400,1200/4800,2400/9600;",
+	"O[9],Serial handshake,Off,On;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -285,6 +287,11 @@ wire ce_pix;
 wire [7:0] video;
 wire speaker;
 wire [1:0] fdd_led;
+wire ser_rts_n;
+
+// UART de MiSTer: líneas de módem activas a nivel alto
+assign UART_RTS = ~ser_rts_n;
+assign UART_DTR = 1;
 
 osborne1 osborne1
 (
@@ -301,6 +308,14 @@ osborne1 osborne1
 	.video(video),
 
 	.speaker(speaker),
+
+	.serial_cfg(status[8:7]),
+	.ser_rxd(UART_RXD),
+	.ser_txd(UART_TXD),
+	.ser_cts_n(~(UART_CTS | ~status[9])),
+	.ser_dcd_n(~(UART_DSR | ~status[9])),
+	.ser_ri_n(1'b1),
+	.ser_rts_n(ser_rts_n),
 
 	.img_mounted(img_mounted),
 	.img_readonly(img_readonly),
